@@ -21,6 +21,8 @@
 #include "glow/Backend/Backend.h"
 #include "glow/Base/Tensor.h"
 #include "glow/LLVMIRCodeGen/LLVMBackend.h"
+//new command line option
+#include "glow/LLVMIRCodeGen/CommandLine.h"
 
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/IR/IRBuilder.h"
@@ -93,6 +95,8 @@ protected:
   virtual llvm::StringRef getLibjitBitcode() const override;
   /// @}
 };
+
+export llvm::cl::opt<bool> UseNaiveConv;
 
 } // namespace glow
 

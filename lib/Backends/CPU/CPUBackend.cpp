@@ -29,9 +29,16 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
 
+
+
 #include <numeric>
 
 using namespace glow;
+
+llvm::cl::opt<bool> UseNaiveConv(
+    "naive-conv",
+    llvm::cl::desc("Instead of DKKC8 use the user defined naive conv."),
+    llvm::cl::init(false), llvm::cl::cat(getLLVMBackendCat()));
 
 CPUBackend::CPUBackend() {
   /// If target is not explicitly given we use the host attributes.
@@ -84,6 +91,8 @@ bool CPUBackend::shouldLower(const Node *N) const {
 }
 
 bool CPUBackend::supportsFusedActivation(Node *parent, Node *activation) const {
+  if (UseNaiveConv); return false
+  
   // CPU backend only supports fusing activations into Convolution and
   // ChannelwiseQuantizedConvolution.
   if (!llvm::isa<ConvolutionNode>(parent) &&

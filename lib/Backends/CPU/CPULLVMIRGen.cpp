@@ -117,6 +117,38 @@ void CPULLVMIRGen::generateLLVMIRForInstr(llvm::IRBuilder<> &builder,
                 depthStripsVal});
     break;
   }
+  case Kinded::Kind::CPUNaiveConvInstKind: {
+    auto *CI = cast<CPUNaiveConvInst>(I);
+    auto *dest = CI->getDest();
+    auto *src = CI->getSrc();
+    auto *filter = CI->getFilter();
+    auto *bias = CI->getBias();
+
+    auto *destPtr = emitValueAddress(builder, dest);
+    auto *srcPtr = emitValueAddress(builder, src);
+    auto *filterPtr = emitValueAddress(builder, filter);
+    auto *biasPtr = emitValueAddress(builder, bias);
+
+    auto *destDims = emitValueDims(builder, dest);
+    auto *srcDims = emitValueDims(builder, src);
+    auto *filterDims = emitValueDims(builder, filter);
+    auto *biasDims = emitValueDims(builder, bias);
+
+    auto *kernels = emitConstDimTArray(builder, CI->getKernels());
+    auto *strides = emitConstDimTArray(builder, CI->getStrides());
+    auto *pads = emitConstDimTArray(builder, CI->getPads());
+
+    size_t inChannels = src->dims()[3];
+    size_t outChannels = dest->dims()[3];
+
+    const char *kernelName = "convNaive";
+    auto *F = getFunction(kernelName, dest->getElementType());
+
+    createCall(builder, F,
+               {destPtr, srcPtr, filterPtr, biasPtr, destDims, srcDims,
+                filterDims, biasDims, kernels, strides, pads});
+    break;
+  }
   default:
     LLVMIRGen::generateLLVMIRForInstr(builder, I);
   }

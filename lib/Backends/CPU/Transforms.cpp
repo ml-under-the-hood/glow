@@ -90,6 +90,30 @@ static Node *optimizeCPUConv(ConvolutionNode *CN, Function *F) {
       CN->getBias(), CN->getKernels(), CN->getStrides(), CN->getPads(), group));
 }
 
+static Node *deoptimizeCPUNaiveConv(ConvolutionNode *CN, Function *F) {
+  if (CN->hasFusedActivation()) {
+    return nullptr;
+  }
+
+  if (CN->getGroup() !=1)  {
+    return nullptr;
+  }
+
+  Constant *filter = dyn_cast<Constant>(CN->getFilter());
+  if (filter->getElementType() != ElemKind::FloatTy) {
+    return nullptr;
+  }
+
+  if (!std::all_of(CN->getDilation().begin(), CN->getDilation().end(),
+                   [](unsigned_t i) { return i == 1; })) {
+    return nullptr;
+  }
+
+  return F->addNode(new CPUNaiveConvNode(
+      CN->getName(), CN->getResult().getType(), CN->getInput(), CN->getFilter(),
+      CN->getBias(), CN->getKernels(), CN->getStrides(), CN->getPads()));
+}
+
 /// Merge Max and Splat nodes into target-specific CPUMaxSplat node.
 /// For quantized network, sinkRescaleQuantizedNode transformation might have
 /// merged Rescale into Max node. In this case we need to pull it out, since
@@ -134,7 +158,7 @@ CPUBackend::transformPostLowering(Function *F, CompilationContext &,
   for (auto &node : F->getNodes()) {
     // Try to replace generic convolution with cpu-optimized version.
     if (auto *CN = dyn_cast<ConvolutionNode>(&node)) {
-      if (Node *NCN = optimizeCPUConv(CN, F)) {
+      if (Node *NCN = deoptimizeCPUNaiveConv(CN, F)) {
         CN->getResult().replaceAllUsesOfWith(NCN);
         changed = true;
         continue;

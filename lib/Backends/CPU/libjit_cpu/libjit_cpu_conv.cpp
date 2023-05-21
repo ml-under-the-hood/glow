@@ -297,4 +297,57 @@ void libjit_convDKKC8_f(float *outW, const float *inW, const float *filterW,
   }     // For each N, the sample in the batch.
 }
 
+void libjit_convNaive_f(float *outW,                
+                        const float *inW, 
+                        const float *filterW,
+                        const float *biasW, 
+                        const dim_t *outWdims,      //(NHWD)
+                        const dim_t *inWdims,       //(NHWC)
+                        const dim_t *filterWdims,   //(DKKC)
+                        const dim_t *biasWdims,     //(d)
+                        const dim_t *kernelSizes,   //(KK)
+                        const dim_t *strides,       //(SH, SW)
+                        const dim_t *pads) {        //(PH, PW)
+
+    dim_t output_h = outWdims[1];
+    dim_t output_w = outWdims[2];
+
+    dim_t filter_depth = filterWdims[0];
+    dim_t filter_h = filterWdims[1];
+    dim_t filter_w = filterWdims[2];
+    dim_t filter_channel = filterWdims[3];
+
+    dim_t batch_size = inWdims[0];
+    //external loop: iterate over samples.
+    for (dim_t s = 0; s < batch_size; s++)
+        //for each output element:
+        for (dim_t ox = 0; ox < output_h; ox++)
+            for  (dim_t oy = 0; oy < output_w; oy++)
+                for (dim_t d = 0; d < filter_depth; d++)
+
+                    //depthwise acc -> initialized with bias
+                    float acc = biasW[d];
+
+                    //for each kernel element
+                    for (dim_t fx = 0; fx < filter_h; fx++)
+                        for ( dim_t fy = 0; fy < filter_w; fy++)
+                            for ( dim_t c = 0; c < filter_channel; c++)
+                                //calculate input coordinates
+                                sdim_t ix = (sdim_t) ox * strides[0] - pads[0] + fx;
+                                sdim_t iy = (sdim_t) oy * strides[1] - pads[1] + fy;
+
+                                //due to padding, the ix and iy can be negative
+                                if (ix < 0 || iy < 0 || ix >= (sdim_t) inWdims[1] || iy >= (sdim_t) inWdims[2]) continue;
+
+                                //get weight position in linear array
+                                dim_t filter_idx = libjit_getXYZW(filterWdims, d, fx, fy, c);
+                                //get input position in linear array
+                                dim_t in_idx = libjit_getXYZW(inWdims, s, (dim_t) ix, (dim_t) iy, c); //(inx, iny, c)
+                                acc += inW[in_idx] * filterW[filter_idx];
+
+                    //position from
+                    dim_t out_idx = libjit_getXYZW(outWdims, s, ox, oy, d);
+                    outW[out_idx] = acc;
+}
+
 } // extern "C"
